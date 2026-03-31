@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Supervisor Dashboard</h2>
+        <p class="subtitle">Decrypt, verify, approve, sign, mutually authenticate, and securely forward purchase orders.</p>
+    </div>
+</div>
+
+<div class="panel">
+    <table class="styled-table">
+        <thead>
+            <tr>
+                <th>PO Number</th>
+                <th>Created By</th>
+                <th>Status</th>
+                <th>P→S Auth</th>
+                <th>P→S Auth Time</th>
+                <th>Decrypted</th>
+                <th>Transmission Time</th>
+                <th>Verified</th>
+                <th>Verification Time</th>
+                <th>Supervisor Signature</th>
+                <th>Supervisor Signed Time</th>
+                <th>S→P Auth</th>
+                <th>S→P Auth Time</th>
+                <th>Approved By</th>
+                <th>Final Decision</th>
+                <th>Decrypt</th>
+                <th>Verify</th>
+                <th>Approve</th>
+                <th>Send to Purchasing</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in orders %}
+            <tr>
+                <td>{{ order.po_number }}</td>
+                <td>{{ order.created_by }}</td>
+                <td><span class="status-badge">{{ order.status }}</span></td>
+                <td>{% if order.ps_auth_completed %}Yes{% else %}No{% endif %}</td>
+                <td>{{ order.ps_auth_timestamp | localdt }}</td>
+                <td>{% if order.decrypted_by_supervisor %}Yes{% else %}No{% endif %}</td>
+                <td>{{ order.transmission_timestamp | localdt }}</td>
+                <td>{% if order.supervisor_verified %}Yes{% else %}No{% endif %}</td>
+                <td>{{ order.supervisor_verification_timestamp | localdt }}</td>
+                <td>{% if order.supervisor_signature %}Present{% else %}Missing{% endif %}</td>
+                <td>{{ order.supervisor_timestamp | localdt }}</td>
+                <td>{% if order.sp_auth_completed %}Yes{% else %}No{% endif %}</td>
+                <td>{{ order.sp_auth_timestamp | localdt }}</td>
+                <td>{{ order.approved_by if order.approved_by else "N/A" }}</td>
+                <td>{{ order.final_decision if order.final_decision else "Pending" }}</td>
+                <td class="action-cell">
+                    {% if order.transmission_stage == "to_supervisor" and not order.decrypted_by_supervisor %}
+                    <form method="POST" action="{{ url_for('decrypt_from_purchaser', po_id=order.id) }}">
+                        <button type="submit" class="btn btn-secondary">Decrypt</button>
+                    </form>
+                    {% else %}
+                        <span class="muted-label">-</span>
+                    {% endif %}
+                </td>
+                <td class="action-cell">
+                    {% if order.decrypted_by_supervisor and not order.supervisor_verified and "Rejected" not in order.status %}
+                    <form method="POST" action="{{ url_for('verify_purchase_order', po_id=order.id) }}">
+                        <button type="submit" class="btn btn-secondary">Verify</button>
+                    </form>
+                    {% else %}
+                        <span class="muted-label">-</span>
+                    {% endif %}
+                </td>
+                <td class="action-cell">
+                    {% if order.supervisor_verified and not order.supervisor_signature %}
+                    <form method="POST" action="{{ url_for('approve_purchase_order', po_id=order.id) }}">
+                        <button type="submit" class="btn btn-primary">Approve & Sign</button>
+                    </form>
+                    {% else %}
+                        <span class="muted-label">-</span>
+                    {% endif %}
+                </td>
+                <td class="action-cell">
+                    {% if order.supervisor_signature and order.transmission_stage != "to_purchasing" %}
+                    <form method="POST" action="{{ url_for('send_to_purchasing', po_id=order.id) }}">
+                        <button type="submit" class="btn btn-primary">Authenticate, Encrypt & Send</button>
+                    </form>
+                    {% else %}
+                        <span class="muted-label">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

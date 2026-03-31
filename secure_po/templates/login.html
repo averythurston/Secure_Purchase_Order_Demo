@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Login</h2>
+        <p class="subtitle">Access the secure purchase order workflow by role.</p>
+    </div>
+</div>
+
+<div class="panel narrow-panel">
+    <form method="POST" class="form-grid">
+        <div class="form-group">
+            <label>Username</label>
+            <input type="text" name="username" required>
+        </div>
+
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" name="password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Login</button>
+    </form>
+</div>
+
+<div class="panel">
+    <h3>Demo Accounts</h3>
+    <div class="demo-grid">
+        <div class="demo-card">
+            <strong>Purchaser</strong>
+            <p>Username: purchaser1</p>
+            <p>Password: pass123</p>
+        </div>
+        <div class="demo-card">
+            <strong>Supervisor</strong>
+            <p>Username: supervisor1</p>
+            <p>Password: pass123</p>
+        </div>
+        <div class="demo-card">
+            <strong>Purchasing</strong>
+            <p>Username: purchasing1</p>
+            <p>Password: pass123</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

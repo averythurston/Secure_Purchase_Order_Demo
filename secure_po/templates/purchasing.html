@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Purchasing Department Dashboard</h2>
+        <p class="subtitle">Decrypt, verify, and finalize approved purchase orders with full security validation.</p>
+    </div>
+</div>
+
+<div class="panel">
+    <table class="styled-table">
+        <thead>
+            <tr>
+                <th>PO Number</th>
+                <th>Created By</th>
+                <th>Status</th>
+                <th>P→S Auth</th>
+                <th>P→S Auth Time</th>
+                <th>S→P Auth</th>
+                <th>S→P Auth Time</th>
+                <th>Decrypted</th>
+                <th>Transmission Time</th>
+                <th>Replay Checked</th>
+                <th>Replay Check Time</th>
+                <th>Purchasing Verified</th>
+                <th>Verification Time</th>
+                <th>Final Decision</th>
+                <th>Decrypt</th>
+                <th>Verify & Finalize</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in orders %}
+            <tr>
+                <td>{{ order.po_number }}</td>
+                <td>{{ order.created_by }}</td>
+                <td><span class="status-badge">{{ order.status }}</span></td>
+                <td>{% if order.ps_auth_completed %}Yes{% else %}No{% endif %}</td>
+                <td>{{ order.ps_auth_timestamp | localdt }}</td>
+                <td>{% if order.sp_auth_completed %}Yes{% else %}No{% endif %}</td>
+                <td>{{ order.sp_auth_timestamp | localdt }}</td>
+                <td>{% if order.decrypted_by_purchasing %}Yes{% else %}No{% endif %}</td>
+                <td>{{ order.transmission_timestamp | localdt }}</td>
+                <td>{% if order.replay_checked %}Yes{% else %}No{% endif %}</td>
+                <td>{{ order.replay_check_timestamp | localdt }}</td>
+                <td>{% if order.purchasing_verified %}Yes{% else %}No{% endif %}</td>
+                <td>{{ order.purchasing_verification_timestamp | localdt }}</td>
+                <td>{{ order.final_decision if order.final_decision else "Pending" }}</td>
+                <td class="action-cell">
+                    {% if order.transmission_stage == "to_purchasing" and not order.decrypted_by_purchasing %}
+                    <form method="POST" action="{{ url_for('decrypt_from_supervisor', po_id=order.id) }}">
+                        <button type="submit" class="btn btn-secondary">Decrypt</button>
+                    </form>
+                    {% else %}
+                        <span class="muted-label">-</span>
+                    {% endif %}
+                </td>
+                <td class="action-cell">
+                    {% if order.decrypted_by_purchasing and not order.final_decision %}
+                    <form method="POST" action="{{ url_for('finalize_purchase_order', po_id=order.id) }}">
+                        <button type="submit" class="btn btn-primary">Verify & Finalize</button>
+                    </form>
+                    {% else %}
+                        <span class="muted-label">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

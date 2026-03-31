@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Audit Log</h2>
+        <p class="subtitle">Protected event history for purchase order actions and security checks.</p>
+    </div>
+</div>
+
+<div class="panel">
+    <p>
+        <strong>Audit Chain Status:</strong>
+        {% if chain_valid %}
+            <span class="status-badge">Valid</span>
+        {% else %}
+            <span class="status-badge">{{ chain_message }}</span>
+        {% endif %}
+    </p>
+    <p class="subtitle">{{ chain_message }}</p>
+</div>
+
+<div class="panel">
+    <table class="styled-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>PO Number</th>
+                <th>Details</th>
+                <th>Previous Hash</th>
+                <th>Current Hash</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.timestamp | localdt }}</td>
+                <td>{{ log.actor }}</td>
+                <td>{{ log.action }}</td>
+                <td>{{ log.po_number if log.po_number else "N/A" }}</td>
+                <td class="details-cell">{{ log.details if log.details else "N/A" }}</td>
+                <td class="details-cell">{{ log.previous_hash[:16] ~ "..." if log.previous_hash else "N/A" }}</td>
+                <td class="details-cell">{{ log.current_hash[:16] ~ "..." if log.current_hash else "N/A" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
