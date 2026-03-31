@@ -4,6 +4,7 @@
 ```bash
 git clone https://github.com/averythurston/Secure_Purchase_Order_Demo.git
 cd Secure_Purchase_Order_Demo
+cd secure_po
 ```
 # 2. Install dependencies
 ```bash
