@@ -1,18 +1,20 @@
-# Secure_Purchase_Order_Demo
+# Secure Purchase Order Demo
+
 ## Setup Instructions
 
-### 1. Clone the repository
-git clone <https://github.com/averythurston/Secure_Purchase_Order_Demo/tree/main>
-cd secure_po
+```bash
+# 1. Clone the repository
+git clone https://github.com/averythurston/Secure_Purchase_Order_Demo.git
+cd Secure_Purchase_Order_Demo
 
-### 2. Install dependencies
+# 2. Install dependencies
 pip install -r requirements.txt
 
-### 3. Generate RSA keys
+# 3. Generate RSA keys
 python generate_keys.py
 
-### 4. Initialize the database
+# 4. Initialize the database
 python init_db.py
 
-### 5. Run the application
+# 5. Run the application
 python app.py
