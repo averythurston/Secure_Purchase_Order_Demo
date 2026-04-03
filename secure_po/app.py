@@ -25,19 +25,26 @@ app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev_fallback_key")
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
 
 db.init_app(app)
 
 MAX_MESSAGE_AGE_MINUTES = 10
-
+MAX_USERNAME_LENGTH = 80
+MAX_PASSWORD_LENGTH = 128
+MAX_ITEM_DESCRIPTION_LENGTH = 255
+MAX_JUSTIFICATION_LENGTH = 2000
+MAX_QUANTITY = 10000
+MAX_COST = 1000000.00
 
 def log_action(actor, action, po_number=None, details=None):
     last_log = AuditLog.query.order_by(AuditLog.id.desc()).first()
     previous_hash = last_log.current_hash if last_log and last_log.current_hash else "0"
 
     timestamp = datetime.now(UTC)
+    timestamp_str = timestamp.isoformat()
 
-    log_string = f"{actor}|{action}|{po_number}|{details}|{timestamp.isoformat()}|{previous_hash}"
+    log_string = f"{actor}|{action}|{po_number}|{details}|{timestamp_str}|{previous_hash}"
     current_hash = hashlib.sha256(log_string.encode("utf-8")).hexdigest()
 
     log = AuditLog(
@@ -46,19 +53,22 @@ def log_action(actor, action, po_number=None, details=None):
         po_number=po_number,
         details=details,
         timestamp=timestamp,
+        timestamp_hash_string=timestamp_str,
         previous_hash=previous_hash,
         current_hash=current_hash
     )
     db.session.add(log)
     db.session.commit()
 
-
 def verify_audit_chain():
     logs = AuditLog.query.order_by(AuditLog.id.asc()).all()
 
     previous_hash = "0"
     for log in logs:
-        log_string = f"{log.actor}|{log.action}|{log.po_number}|{log.details}|{log.timestamp.isoformat()}|{previous_hash}"
+        log_string = (
+            f"{log.actor}|{log.action}|{log.po_number}|{log.details}|"
+            f"{log.timestamp_hash_string}|{previous_hash}"
+        )
         recomputed = hashlib.sha256(log_string.encode("utf-8")).hexdigest()
 
         if log.previous_hash != previous_hash:
@@ -71,6 +81,83 @@ def verify_audit_chain():
 
     return True, "Audit chain verified successfully."
 
+def normalize_text(value):
+    return value.strip() if isinstance(value, str) else ""
+
+
+def validate_purchase_order_input(item_description, quantity_raw, cost_raw, justification):
+    item_description = normalize_text(item_description)
+    justification = normalize_text(justification)
+
+    if not item_description:
+        return False, "Item description is required.", None
+
+    if len(item_description) > MAX_ITEM_DESCRIPTION_LENGTH:
+        return False, f"Item description must be {MAX_ITEM_DESCRIPTION_LENGTH} characters or less.", None
+
+    if not justification:
+        return False, "Justification is required.", None
+
+    if len(justification) > MAX_JUSTIFICATION_LENGTH:
+        return False, f"Justification must be {MAX_JUSTIFICATION_LENGTH} characters or less.", None
+
+    try:
+        quantity = int(quantity_raw)
+    except (TypeError, ValueError):
+        return False, "Quantity must be a valid integer.", None
+
+    if quantity <= 0 or quantity > MAX_QUANTITY:
+        return False, f"Quantity must be between 1 and {MAX_QUANTITY}.", None
+
+    try:
+        cost = float(cost_raw)
+    except (TypeError, ValueError):
+        return False, "Cost must be a valid number.", None
+
+    if cost <= 0 or cost > MAX_COST:
+        return False, f"Cost must be greater than 0 and no more than {MAX_COST:.2f}.", None
+
+    cleaned = {
+        "item_description": item_description,
+        "quantity": quantity,
+        "cost": cost,
+        "justification": justification
+    }
+
+    return True, None, cleaned
+
+def validate_positive_int_id(value, field_name="ID"):
+    if not isinstance(value, int):
+        return False, f"{field_name} must be an integer."
+    if value <= 0:
+        return False, f"{field_name} must be a positive integer."
+    return True, None
+
+
+def is_nonempty_string(value, max_length=None):
+    if not isinstance(value, str):
+        return False
+    if not value.strip():
+        return False
+    if max_length is not None and len(value) > max_length:
+        return False
+    return True
+
+
+def validate_encrypted_fields(po):
+    if not is_nonempty_string(po.encrypted_package_b64):
+        return False, "Encrypted package is missing or invalid."
+    if not is_nonempty_string(po.encrypted_session_key_b64):
+        return False, "Encrypted session key is missing or invalid."
+    return True, None
+
+
+def validate_signature_fields(po):
+    if po.purchaser_signature is not None and not is_nonempty_string(po.purchaser_signature):
+        return False, "Purchaser signature is malformed."
+    if po.supervisor_signature is not None and not is_nonempty_string(po.supervisor_signature):
+        return False, "Supervisor signature is malformed."
+    return True, None
 
 def login_required(role=None):
     def decorator(f):
@@ -235,8 +322,24 @@ def home():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"].strip()
-        password = request.form["password"].strip()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+
+        if not username or not password:
+            flash("Username and password are required.")
+            return render_template("login.html"), 400
+
+        if len(username) > MAX_USERNAME_LENGTH:
+            flash("Username is too long.")
+            return render_template("login.html"), 400
+
+        if len(password) > MAX_PASSWORD_LENGTH:
+            flash("Password is too long.")
+            return render_template("login.html"), 400
+
+        if not username.replace("_", "").replace("-", "").isalnum():
+            flash("Username contains invalid characters.")
+            return render_template("login.html"), 400
 
         user = User.query.filter_by(username=username).first()
 
@@ -254,6 +357,7 @@ def login():
                 return redirect(url_for("purchasing_dashboard"))
         else:
             flash("Invalid username or password.")
+            return render_template("login.html"), 401
 
     return render_template("login.html")
 
@@ -331,7 +435,17 @@ def purchaser_dashboard():
 @app.route("/sign_po/<int:po_id>", methods=["POST"])
 @login_required(role="purchaser")
 def sign_purchase_order(po_id):
+        
+    valid_id, id_error = validate_positive_int_id(po_id, "Purchase order ID")
+    if not valid_id:
+        flash(id_error)
+        return redirect(url_for("purchaser_dashboard"))
+
     po = PurchaseOrder.query.get_or_404(po_id)
+
+    if po.final_decision is not None:
+        flash("This purchase order has already been finalized and cannot be modified.")
+        return redirect(url_for("purchaser_dashboard"))
 
     if po.created_by != session["username"]:
         flash("You may only sign your own purchase orders.")
@@ -364,7 +478,16 @@ def sign_purchase_order(po_id):
 @app.route("/send_to_supervisor/<int:po_id>", methods=["POST"])
 @login_required(role="purchaser")
 def send_to_supervisor(po_id):
+    valid_id, id_error = validate_positive_int_id(po_id, "Purchase order ID")
+    if not valid_id:
+        flash(id_error)
+        return redirect(url_for("purchaser_dashboard"))
+
     po = PurchaseOrder.query.get_or_404(po_id)
+
+    if po.final_decision is not None:
+        flash("This purchase order has already been finalized and cannot be sent again.")
+        return redirect(url_for("purchaser_dashboard"))
 
     if po.created_by != session["username"]:
         flash("You may only send your own purchase orders.")
@@ -372,6 +495,10 @@ def send_to_supervisor(po_id):
 
     if not po.purchaser_signature:
         flash("Purchase order must be signed before secure transmission.")
+        return redirect(url_for("purchaser_dashboard"))
+
+    if not is_nonempty_string(session.get("username"), MAX_USERNAME_LENGTH):
+        flash("Invalid session username.")
         return redirect(url_for("purchaser_dashboard"))
 
     auth_ok, auth_details = perform_mutual_auth(session["username"], "supervisor1")
@@ -440,8 +567,9 @@ def decrypt_from_purchaser(po_id):
         flash("Mutual authentication must succeed before supervisor decryption.")
         return redirect(url_for("supervisor_dashboard"))
 
-    if not po.encrypted_package_b64 or not po.encrypted_session_key_b64:
-        flash("Encrypted package is missing.")
+    fields_ok, fields_error = validate_encrypted_fields(po)
+    if not fields_ok:
+        flash(fields_error)
         return redirect(url_for("supervisor_dashboard"))
 
     try:
@@ -477,6 +605,17 @@ def decrypt_from_purchaser(po_id):
 @login_required(role="supervisor")
 def verify_purchase_order(po_id):
     po = PurchaseOrder.query.get_or_404(po_id)
+
+    sig_ok, sig_error = validate_signature_fields(po)
+    if not sig_ok:
+        po.supervisor_verified = False
+        po.supervisor_verification_timestamp = datetime.now(UTC).isoformat()
+        po.supervisor_verification_details = sig_error
+        po.status = "Rejected - Invalid Signature Format"
+        db.session.commit()
+
+        flash(sig_error)
+        return redirect(url_for("supervisor_dashboard"))
 
     if not po.decrypted_by_supervisor:
         flash("Purchase order must be decrypted by supervisor before verification.")
@@ -603,6 +742,10 @@ def send_to_purchasing(po_id):
         flash("Purchase order must be approved and signed before sending to purchasing.")
         return redirect(url_for("supervisor_dashboard"))
 
+    if not is_nonempty_string(session.get("username"), MAX_USERNAME_LENGTH):
+        flash("Invalid session username.")
+        return redirect(url_for("supervisor_dashboard"))
+
     auth_ok, auth_details = perform_mutual_auth(session["username"], "purchasing1")
     auth_time = datetime.now(UTC).isoformat()
 
@@ -669,8 +812,9 @@ def decrypt_from_supervisor(po_id):
         flash("Mutual authentication must succeed before purchasing decryption.")
         return redirect(url_for("purchasing_dashboard"))
 
-    if not po.encrypted_package_b64 or not po.encrypted_session_key_b64:
-        flash("Encrypted package is missing.")
+    fields_ok, fields_error = validate_encrypted_fields(po)
+    if not fields_ok:
+        flash(fields_error)
         return redirect(url_for("purchasing_dashboard"))
 
     try:
@@ -706,6 +850,14 @@ def decrypt_from_supervisor(po_id):
 @login_required(role="purchasing")
 def finalize_purchase_order(po_id):
     po = PurchaseOrder.query.get_or_404(po_id)
+
+    if not is_nonempty_string(po.created_by, MAX_USERNAME_LENGTH):
+        flash("Invalid purchaser identity.")
+        return redirect(url_for("purchasing_dashboard"))
+
+    if not is_nonempty_string(po.approved_by, MAX_USERNAME_LENGTH):
+        flash("Invalid supervisor identity.")
+        return redirect(url_for("purchasing_dashboard"))
 
     if not po.decrypted_by_purchasing:
         flash("Purchase order must be decrypted by purchasing before final verification.")
@@ -828,6 +980,10 @@ def finalize_purchase_order(po_id):
 
     return redirect(url_for("purchasing_dashboard"))
 
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    flash("Submitted form is too large.")
+    return redirect(url_for("login")), 413
 
 if __name__ == "__main__":
     app.run(debug=True)

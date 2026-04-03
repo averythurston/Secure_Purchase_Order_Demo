@@ -80,6 +80,7 @@ class AuditLog(db.Model):
     actor = db.Column(db.String(80), nullable=False)
     action = db.Column(db.String(255), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp_hash_string = db.Column(db.String(100), nullable=False)
     details = db.Column(db.Text, nullable=True)
 
     previous_hash = db.Column(db.String(64), nullable=True)

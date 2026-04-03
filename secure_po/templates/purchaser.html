@@ -13,22 +13,22 @@
     <form method="POST" class="form-grid">
         <div class="form-group">
             <label>Item Description</label>
-            <input type="text" name="item_description" required>
+            <input type="text" name="item_description" maxlength="255" required>
         </div>
 
         <div class="form-group">
             <label>Quantity</label>
-            <input type="number" name="quantity" required>
+            <input type="number" name="quantity" min="1" max="10000" required>
         </div>
 
         <div class="form-group">
             <label>Cost</label>
-            <input type="number" step="0.01" name="cost" required>
+            <input type="number" step="0.01" name="cost" min="0.01" max="1000000" required>
         </div>
 
         <div class="form-group full-width">
             <label>Justification</label>
-            <textarea name="justification" required></textarea>
+            <textarea name="justification" maxlength="2000" required></textarea>
         </div>
 
         <button type="submit" class="btn btn-primary">Create Purchase Order</button>
@@ -71,7 +71,9 @@
                 <td>{% if order.transmission_stage == "to_supervisor" or order.decrypted_by_supervisor %}Yes{% else %}No{% endif %}</td>
                 <td>{{ order.transmission_timestamp | localdt }}</td>
                 <td class="action-cell">
-                    {% if not order.purchaser_signature %}
+                    {% if order.final_decision %}
+                        <span class="muted-label">Finalized</span>
+                    {% elif not order.purchaser_signature %}
                     <form method="POST" action="{{ url_for('sign_purchase_order', po_id=order.id) }}">
                         <button type="submit" class="btn btn-secondary">Sign PO</button>
                     </form>
