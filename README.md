@@ -22,3 +22,8 @@ python init_db.py
 ```bash
 python app.py
 ```
+## Default Login Credentials
+
+- purchaser1 / pass123
+- supervisor1 / pass123
+- purchasing1 / pass123
